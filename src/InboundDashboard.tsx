@@ -4,8 +4,6 @@ const InboundDashboard = () => {
   const [status, setStatus] = useState('ok'); 
   const [visionData, setVisionData] = useState<any>(null);
   const [reason, setReason] = useState('');
-  
-  // S5: 初始化 Overrides 表单状态
   const [overrides, setOverrides] = useState({
     f01: '', f02: '', f03: '', f04: '', f05: '', f08: '', f10: '', f11: ''
   });
@@ -21,20 +19,12 @@ const InboundDashboard = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          exception_reason: reason || "S5校对区联调",
-          overrides: overrides // 传当前表单值
+          exception_reason: reason || "S6预埋联调",
+          overrides: overrides 
         })
       });
       const res = await response.json();
-      const data = res.message || res;
-      setVisionData(data);
-      
-      // 若后端有返回建议值，则更新表单（此处为后续 OCR 预留）
-      if (data.vision && data.ok) {
-        // 示例：若视觉识别出单号，同步给 f03
-        // setOverrides(prev => ({ ...prev, f03: data.vision.invoice_no || prev.f03 }));
-      }
-      
+      setVisionData(res.message || res);
       setStatus('ok');
     } catch (err) {
       console.error(err);
@@ -42,71 +32,65 @@ const InboundDashboard = () => {
     }
   };
 
+  // S6: 定义预埋键显示逻辑
+  const metaKeys = [
+    { key: 'batch_no', label: '批次号' },
+    { key: 'external_bag_code', label: '外袋码' },
+    { key: 'external_bag_code_list', label: '外袋码清单' },
+    { key: 'material_source_type', label: '物料来源' },
+    { key: 'regrind_class', label: '回料等级' }
+  ];
+
   return (
     <div className="p-4 space-y-6 bg-gray-50 min-h-screen pb-40 font-sans">
-      {/* 1. 采集区 */}
       <section className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-        <h2 className="text-lg font-bold text-gray-800 mb-3">1. 拍照/理由</h2>
-        <input 
-          type="text" 
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          placeholder="不拍照理由..." 
-          className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm mb-3"
-        />
-        <button onClick={handleIdentify} className="w-full bg-blue-600 text-white font-bold py-2 rounded-lg text-sm">
-          调用后端识别
-        </button>
+        <h2 className="text-lg font-bold text-gray-800 mb-3">1. 采集/识别</h2>
+        <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="不拍照理由..." className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm mb-3" />
+        <button onClick={handleIdentify} className="w-full bg-blue-600 text-white font-bold py-2 rounded-lg text-sm">解析单据</button>
       </section>
 
-      {/* 2. 识别结果 (JSON) */}
       <section className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-        <h2 className="text-sm font-bold text-gray-500 mb-2 uppercase">2. 视觉返回</h2>
-        <pre className="text-[10px] text-gray-500 font-mono bg-gray-50 p-2 rounded overflow-auto max-h-32">
-          {JSON.stringify(visionData, null, 2)}
-        </pre>
+        <h2 className="text-sm font-bold text-gray-500 mb-2 uppercase">2. 识别结果 (JSON)</h2>
+        <pre className="text-[10px] text-gray-500 font-mono bg-gray-50 p-2 rounded overflow-auto max-h-32">{JSON.stringify(visionData, null, 2)}</pre>
       </section>
 
-      {/* 3. 主字段校对区 (S5核心) */}
       <section className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-        <div className="flex items-center space-x-2 mb-4">
-          <div className="w-1.5 h-5 bg-orange-500 rounded-full"></div>
-          <h2 className="text-lg font-bold text-gray-800">3. 校对表单 (Overrides)</h2>
-        </div>
+        <h2 className="text-lg font-bold text-gray-800 mb-4">3. 主字段校对</h2>
         <div className="grid grid-cols-1 gap-3">
-          {[
-            { id: 'f01', label: 'Material 物料' },
-            { id: 'f02', label: 'Supplier 供应商' },
-            { id: 'f03', label: 'Invoice No. 送货单号' },
-            { id: 'f04', label: 'Weight (吨) 毛重' },
-            { id: 'f05', label: 'Package Qty 袋数' },
-            { id: 'f08', label: 'Location 库位', highlight: true, note: '人必填' },
-            { id: 'f10', label: 'Exception 异常说明' },
-            { id: 'f11', label: 'Remarks 备注' }
-          ].map(f => (
-            <div key={f.id}>
-              <label className={`text-xs font-bold ${f.highlight ? 'text-red-500' : 'text-gray-500'}`}>
-                {f.label} {f.note && `(${f.note})`}
-              </label>
-              <input 
-                type="text" 
-                value={(overrides as any)[f.id]}
-                onChange={(e) => handleFieldChange(f.id, e.target.value)}
-                className={`w-full p-2 border rounded-lg text-sm ${f.highlight ? 'border-red-200 bg-red-50/20' : 'border-gray-200'}`}
-              />
+          {Object.keys(overrides).map(key => (
+            <div key={key}>
+              <label className="text-xs font-bold text-gray-500">{key}</label>
+              <input type="text" value={(overrides as any)[key]} onChange={(e) => handleFieldChange(key, e.target.value)} className="w-full p-2 border border-gray-200 rounded-lg text-sm" />
             </div>
           ))}
         </div>
       </section>
 
-      {/* 5. 结果展示区 */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur p-4 border-t shadow-lg text-center">
+      {/* S6: 预埋展示区落地 */}
+      <section className="bg-gray-100/50 p-4 rounded-xl border border-dashed border-gray-300">
+        <h2 className="text-xs font-bold text-gray-400 mb-3 uppercase tracking-widest text-center">4. 预埋信息 (不落库/不阻塞)</h2>
+        <div className="grid grid-cols-1 gap-2">
+          {metaKeys.map(item => {
+            const value = visionData?.meta?.[item.key];
+            return (
+              <div key={item.key} className="flex justify-between items-center bg-white p-2 rounded border border-gray-100">
+                <span className="text-[10px] text-gray-500 font-medium">{item.label} <code className="text-[8px] opacity-50">({item.key})</code></span>
+                <span className={`text-xs font-mono ${value ? 'text-blue-600 font-bold' : 'text-gray-300'}`}>
+                  {value || 'NULL'}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur p-4 border-t shadow-lg">
         <div className="flex justify-between text-[10px] font-bold text-gray-400 mb-2">
           <span>STATUS: {status}</span>
           <span>DRAFT: {visionData?.draft?.name || 'PENDING'}</span>
         </div>
-        <button className="w-full bg-slate-900 text-white font-bold py-3 rounded-xl opacity-50 cursor-not-allowed">
-          确认提交 (待S6闭环)
+        <button className="w-full bg-slate-900 text-white font-bold py-3 rounded-xl">
+          确认提交建草稿 (S7功能)
         </button>
       </div>
     </div>
