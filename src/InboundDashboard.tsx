@@ -12,22 +12,20 @@ const InboundDashboard = () => {
   const handleSubmit = async () => {
     setStatus('loading');
     try {
-      // 1. 强制携带凭据去首页抓取管理员专属 Token
-      const homeRes = await fetch('/', { credentials: 'include' });
-      const html = await homeRes.text();
-      const tokenMatch = html.match(/csrf_token":\s*"(.*?)"/);
-      const token = tokenMatch ? tokenMatch[1] : "";
+      // 1. 直接从当前浏览器 cookie 读取 csrf_token
+      const tokenMatch = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/);
+      const token = tokenMatch ? decodeURIComponent(tokenMatch[1]) : "";
       setStolenToken(token);
 
       // 2. 带着领到的证件提交数据
       const response = await fetch('/api/method/hanyu_warehouse.api.v1.vision_to_draft.create_rm_inbound_draft_from_receipt', {
         method: 'POST',
-        headers: { 
+        credentials: 'omit',
+          headers: { 
           'Content-Type': 'application/json', 
           'X-Frappe-CSRF-Token': token 
         },
         body: JSON.stringify({ overrides: overrides }),
-        credentials: 'include' 
       });
 
       const text = await response.text();
