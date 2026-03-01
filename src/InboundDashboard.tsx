@@ -1,38 +1,52 @@
 import { useState } from 'react';
 
 const InboundDashboard = () => {
-  const [status, setStatus] = useState('ok'); 
+  const [status, setStatus] = useState('idle'); // idle, loading, success, error
   const [visionData, setVisionData] = useState<any>(null);
   const [reason, setReason] = useState('');
+  
+  // 初始化 Overrides 表单（预填部分合法值以方便 S7 验收测试）
   const [overrides, setOverrides] = useState({
-    f01: '', f02: '', f03: '', f04: '', f05: '', f08: '', f10: '', f11: ''
+    f01: 'PP再生料', 
+    f02: '宁波国睿新材料有限公司', 
+    f03: 'S7-AUTO-' + Date.now().toString().slice(-4), 
+    f04: '1.0', 
+    f05: '40', 
+    f08: 'a2', 
+    f10: '', 
+    f11: 'S7前端闭环测试'
   });
 
   const handleFieldChange = (field: string, value: string) => {
     setOverrides(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleIdentify = async () => {
+  const handleSubmit = async () => {
     setStatus('loading');
     try {
       const response = await fetch('/api/method/hanyu_warehouse.api.v1.vision_to_draft.create_rm_inbound_draft_from_receipt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          exception_reason: reason || "S6预埋联调",
+          exception_reason: reason || "S7前端自动提交",
           overrides: overrides 
         })
       });
       const res = await response.json();
-      setVisionData(res.message || res);
-      setStatus('ok');
+      const data = res.message || res;
+      setVisionData(data);
+      
+      if (data.ok && data.draft?.name) {
+        setStatus('success');
+      } else {
+        setStatus('error');
+      }
     } catch (err) {
       console.error(err);
       setStatus('error');
     }
   };
 
-  // S6: 定义预埋键显示逻辑
   const metaKeys = [
     { key: 'batch_no', label: '批次号' },
     { key: 'external_bag_code', label: '外袋码' },
@@ -42,55 +56,59 @@ const InboundDashboard = () => {
   ];
 
   return (
-    <div className="p-4 space-y-6 bg-gray-50 min-h-screen pb-40 font-sans">
+    <div className="p-4 space-y-6 bg-gray-50 min-h-screen pb-48 font-sans text-slate-900">
+      {/* 1. 采集区 */}
       <section className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-        <h2 className="text-lg font-bold text-gray-800 mb-3">1. 采集/识别</h2>
-        <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="不拍照理由..." className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm mb-3" />
-        <button onClick={handleIdentify} className="w-full bg-blue-600 text-white font-bold py-2 rounded-lg text-sm">解析单据</button>
+        <h2 className="text-lg font-bold mb-3 flex items-center"><span className="w-1.5 h-5 bg-blue-600 rounded-full mr-2"></span>1. 异常理由</h2>
+        <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="未拍照理由..." className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
       </section>
 
+      {/* 2. Overrides 校对区 */}
       <section className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-        <h2 className="text-sm font-bold text-gray-500 mb-2 uppercase">2. 识别结果 (JSON)</h2>
-        <pre className="text-[10px] text-gray-500 font-mono bg-gray-50 p-2 rounded overflow-auto max-h-32">{JSON.stringify(visionData, null, 2)}</pre>
-      </section>
-
-      <section className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-        <h2 className="text-lg font-bold text-gray-800 mb-4">3. 主字段校对</h2>
+        <h2 className="text-lg font-bold mb-4 flex items-center text-orange-600"><span className="w-1.5 h-5 bg-orange-500 rounded-full mr-2"></span>2. 核心校对 (f01-f11)</h2>
         <div className="grid grid-cols-1 gap-3">
-          {Object.keys(overrides).map(key => (
-            <div key={key}>
-              <label className="text-xs font-bold text-gray-500">{key}</label>
-              <input type="text" value={(overrides as any)[key]} onChange={(e) => handleFieldChange(key, e.target.value)} className="w-full p-2 border border-gray-200 rounded-lg text-sm" />
+          {Object.entries(overrides).map(([key, val]) => (
+            <div key={key} className="flex flex-col">
+              <label className="text-[10px] font-bold text-gray-400 uppercase ml-1 mb-1">{key}</label>
+              <input type="text" value={val} onChange={(e) => handleFieldChange(key, e.target.value)} className="w-full p-2 border border-gray-200 rounded-lg text-sm bg-white" />
             </div>
           ))}
         </div>
       </section>
 
-      {/* S6: 预埋展示区落地 */}
-      <section className="bg-gray-100/50 p-4 rounded-xl border border-dashed border-gray-300">
-        <h2 className="text-xs font-bold text-gray-400 mb-3 uppercase tracking-widest text-center">4. 预埋信息 (不落库/不阻塞)</h2>
-        <div className="grid grid-cols-1 gap-2">
-          {metaKeys.map(item => {
-            const value = visionData?.meta?.[item.key];
-            return (
-              <div key={item.key} className="flex justify-between items-center bg-white p-2 rounded border border-gray-100">
-                <span className="text-[10px] text-gray-500 font-medium">{item.label} <code className="text-[8px] opacity-50">({item.key})</code></span>
-                <span className={`text-xs font-mono ${value ? 'text-blue-600 font-bold' : 'text-gray-300'}`}>
-                  {value || 'NULL'}
-                </span>
-              </div>
-            );
-          })}
+      {/* 3. 预埋展示区 */}
+      <section className="bg-gray-100/50 p-4 rounded-xl border border-dashed border-gray-200">
+        <h2 className="text-xs font-bold mb-3 uppercase tracking-widest text-center text-gray-400">3. 预埋信息 (只读)</h2>
+        <div className="space-y-2 opacity-60">
+          {metaKeys.map(item => (
+            <div key={item.key} className="flex justify-between text-xs border-b border-gray-100 pb-1">
+              <span className="text-gray-500">{item.label}</span>
+              <span className="font-mono text-gray-400">{visionData?.meta?.[item.key] || 'NULL'}</span>
+            </div>
+          ))}
         </div>
       </section>
 
-      <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur p-4 border-t shadow-lg">
-        <div className="flex justify-between text-[10px] font-bold text-gray-400 mb-2">
-          <span>STATUS: {status}</span>
-          <span>DRAFT: {visionData?.draft?.name || 'PENDING'}</span>
-        </div>
-        <button className="w-full bg-slate-900 text-white font-bold py-3 rounded-xl">
-          确认提交建草稿 (S7功能)
+      {/* 5. 提交结果与固定操作区 */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur p-4 border-t shadow-2xl z-50">
+        {status === 'success' && (
+          <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg text-center animate-pulse">
+            <p className="text-green-700 font-bold text-sm">✅ 草稿创建成功！</p>
+            <p className="text-green-600 text-xs font-mono">单号: {visionData?.draft?.name}</p>
+            <p className="text-[10px] text-green-500 mt-1">docstatus=0 (非入账)</p>
+          </div>
+        )}
+        {status === 'error' && (
+          <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600 overflow-auto max-h-24 font-mono">
+            <strong>❌ 拦截原因:</strong> {JSON.stringify(visionData?.error || visionData || '请求失败')}
+          </div>
+        )}
+        <button 
+          onClick={handleSubmit}
+          disabled={status === 'loading'}
+          className={`w-full font-bold py-4 rounded-xl transition-all shadow-lg text-lg ${status === 'loading' ? 'bg-gray-400 cursor-not-allowed' : 'bg-slate-900 text-white active:scale-95'}`}
+        >
+          {status === 'loading' ? '正在创建草稿...' : '确认并生成 RM Inbound 草稿'}
         </button>
       </div>
     </div>
