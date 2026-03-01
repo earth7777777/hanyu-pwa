@@ -71,3 +71,6 @@ export default defineConfig([
   },
 ])
 ```
+
+## PWA 同域入口（后端托管）
+- http://hanyu.localhost:8000/files/pwa/index.html
